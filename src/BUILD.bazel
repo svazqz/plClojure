@@ -1,0 +1,25 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+java_import(
+    name = "spec_alpha",
+    jars = ["@spec_alpha//file"],
+)
+
+java_import(
+    name = "clojure",
+    jars = ["@clojure//file"],
+)
+
+# A library that wraps a Java method into a C++ method by starting a JVM and
+# executing the method in it. It has access to the usual jni.h header via the
+# dependency on @fmeum_rules_jni//jni, but does not require any code specific
+# to rules_jni.
+cc_binary(
+    name = "pl_clojure",
+    srcs = ["main.cpp"],
+    deps = [
+        "@fmeum_rules_jni//jni",
+        "@fmeum_rules_jni//jni:libjvm"
+    ],
+    visibility = ["//visibility:public"],
+)
