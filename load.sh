@@ -38,4 +38,7 @@ psql postgres -v ON_ERROR_STOP=1 -c "SELECT pl_clojure_call_array('(fn [& args] 
 if [ $? -ne 0 ]; then
     echo "Error occurred. Checking PostgreSQL logs..."
     tail -n 50 /opt/homebrew/var/log/postgresql@14.log
+    exit 1
 fi
+
+./test.sh
