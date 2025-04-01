@@ -3,6 +3,10 @@
 #include "utils/builtins.h" // Built-in PostgreSQL utilities
 #include "executor/spi.h"   // Server Programming Interface
 #include <jni.h>         // Java Native Interface
+#include "utils/array.h"  // Add this include for array handling
+#include "access/htup_details.h"  // Add this for array functions
+#include "catalog/pg_type.h"      // Add this for array functions
+#include "utils/lsyscache.h"  // Add this for get_typlenbyvalalign
 
 // PostgreSQL module magic macro - required for all loadable modules
 PG_MODULE_MAGIC;
@@ -19,7 +23,9 @@ static void init_jvm(void) {
     JavaVMOption options[1];
 
     // Set classpath to find Clojure JAR files
-    options[0].optionString = "-Djava.class.path=/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/clojure-1.9.0.jar:/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/spec.alpha-0.1.143.jar";
+    options[0].optionString = "-Djava.class.path=/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/clojure-1.9.0.jar:"
+                             "/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/spec.alpha-0.1.143.jar:"
+                             "/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/core.specs.alpha-0.1.24.jar";
 
     // Configure JVM initialization parameters
     vm_args.version = JNI_VERSION_1_8;
@@ -36,71 +42,158 @@ static void init_jvm(void) {
 // Register function info for PostgreSQL
 PG_FUNCTION_INFO_V1(pl_clojure_call);
 
-// Main function that executes Clojure code
-Datum pl_clojure_call(PG_FUNCTION_ARGS) {
-    // Initialize JVM if not already running
+// Add new function declaration
+PG_FUNCTION_INFO_V1(pl_clojure_call_array);
+
+Datum pl_clojure_call_array(PG_FUNCTION_ARGS) {
     if (jvm == NULL) init_jvm();
 
-    // Get input text from PostgreSQL and convert to C string
     text *clojure_code = PG_GETARG_TEXT_PP(0);
-    char *code = text_to_cstring(clojure_code);
+    ArrayType *arr = PG_GETARG_ARRAYTYPE_P(1);
+    
+    // Get array elements
+    Datum *elements;
+    bool *nulls;
+    int nelements;
+    deconstruct_array(arr, TEXTOID, -1, false, 'i',
+                     &elements, &nulls, &nelements);
 
-    // Load the Clojure runtime class (RT)
-    jclass RT = (*env)->FindClass(env, "clojure/lang/RT");
-    if (!RT) {
+    // Build Clojure vector string from array elements
+    StringInfoData args_buf;
+    initStringInfo(&args_buf);
+    appendStringInfoChar(&args_buf, '[');
+    
+    for (int i = 0; i < nelements; i++) {
+        if (i > 0) appendStringInfoString(&args_buf, " ");
+        if (!nulls[i]) {
+            char *str = TextDatumGetCString(elements[i]);
+            appendStringInfoChar(&args_buf, '"');
+            appendStringInfoString(&args_buf, str);
+            appendStringInfoChar(&args_buf, '"');
+            pfree(str);
+        } else {
+            appendStringInfoString(&args_buf, "nil");
+        }
+    }
+    appendStringInfoChar(&args_buf, ']');
+
+    // Create the Clojure code
+    char *code = text_to_cstring(clojure_code);
+    StringInfoData buf;
+    initStringInfo(&buf);
+    appendStringInfo(&buf, "(do (require 'clojure.core) (let [f %s args %s] (apply f args)))", 
+                    code, args_buf.data);
+
+    // Get Clojure runtime
+    jclass RTClass = (*env)->FindClass(env, "clojure/lang/RT");
+    if (!RTClass) {
+        (*env)->ExceptionDescribe(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
         ereport(ERROR, (errmsg("Failed to find Clojure RT class")));
     }
 
-    // Get the static 'var' method from RT class
-    // This method is used to look up Clojure vars (functions/values)
-    jmethodID var = (*env)->GetStaticMethodID(env, RT, "var", 
+    // Get var method
+    jmethodID varMethod = (*env)->GetStaticMethodID(env, RTClass, "var",
         "(Ljava/lang/String;Ljava/lang/String;)Lclojure/lang/Var;");
-    if (!var) {
-        ereport(ERROR, (errmsg("Failed to find method 'var' in RT")));
+    if (!varMethod) {
+        (*env)->ExceptionDescribe(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to find var method")));
     }
 
-    // Get the 'load-string' function from clojure.core
-    // This function evaluates Clojure code from a string
-    jobject load_string_var = (*env)->CallStaticObjectMethod(env, RT, var,
-        (*env)->NewStringUTF(env, "clojure.core"),
-        (*env)->NewStringUTF(env, "load-string"));
-    if (!load_string_var) {
-        ereport(ERROR, (errmsg("Failed to get load-string var")));
+    // Create Java string from Clojure code
+    jstring jcode = (*env)->NewStringUTF(env, buf.data);
+    if (!jcode) {
+        (*env)->ExceptionDescribe(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to create Java string")));
     }
 
-    // Get the Var class to access its invoke method
-    jclass Var = (*env)->FindClass(env, "clojure/lang/Var");
-    if (!Var) {
+    // Get the Var class and invoke method
+    jclass VarClass = (*env)->FindClass(env, "clojure/lang/Var");
+    if (!VarClass) {
+        (*env)->ExceptionDescribe(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
         ereport(ERROR, (errmsg("Failed to find Var class")));
     }
 
-    // Get the invoke method that will execute our Clojure code
-    jmethodID invoke = (*env)->GetMethodID(env, Var, "invoke",
+    jmethodID invokeMethod = (*env)->GetMethodID(env, VarClass, "invoke",
         "(Ljava/lang/Object;)Ljava/lang/Object;");
-    if (!invoke) {
-        ereport(ERROR, (errmsg("Failed to find 'invoke' method in Var")));
+    if (!invokeMethod) {
+        (*env)->ExceptionDescribe(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to find invoke method")));
     }
 
-    // Execute the Clojure code by calling load-string
-    jobject result = (*env)->CallObjectMethod(env, load_string_var, invoke,
-        (*env)->NewStringUTF(env, code));
+    // Get load-string var and evaluate
+    jobject loadStringVar = (*env)->CallStaticObjectMethod(env, RTClass, varMethod,
+        (*env)->NewStringUTF(env, "clojure.core"),
+        (*env)->NewStringUTF(env, "load-string"));
+    if (!loadStringVar || (*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to get load-string var")));
+    }
 
-    // Convert the result to a string using Java's toString()
-    jclass Object = (*env)->FindClass(env, "java/lang/Object");
-    jmethodID toString = (*env)->GetMethodID(env, Object, "toString",
-        "()Ljava/lang/String;");
-    
-    // Get the string representation of the result
-    jstring resultStr = (jstring)(*env)->CallObjectMethod(env, result, toString);
+    // Evaluate the code
+    jobject result = (*env)->CallObjectMethod(env, loadStringVar, invokeMethod, jcode);
+    if (!result || (*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to evaluate Clojure code")));
+    }
+
+    // Get result's class and toString method
+    jclass resultClass = (*env)->GetObjectClass(env, result);
+    if (!resultClass) {
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to get result class")));
+    }
+
+    jmethodID toStringMethod = (*env)->GetMethodID(env, resultClass, "toString", "()Ljava/lang/String;");
+    if (!toStringMethod) {
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to get toString method")));
+    }
+
+    // Convert result to string
+    jstring resultStr = (jstring)(*env)->CallObjectMethod(env, result, toStringMethod);
+    if (!resultStr || (*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        pfree(code);
+        pfree(args_buf.data);
+        pfree(buf.data);
+        ereport(ERROR, (errmsg("Failed to convert result to string")));
+    }
+
     const char* str = (*env)->GetStringUTFChars(env, resultStr, NULL);
-    
-    // Convert the result to PostgreSQL text type
     text* output = cstring_to_text(str);
     
-    // Clean up JNI resources
+    // Cleanup
     (*env)->ReleaseStringUTFChars(env, resultStr, str);
     pfree(code);
+    pfree(args_buf.data);
+    pfree(buf.data);
     
-    // Return the result to PostgreSQL
     PG_RETURN_TEXT_P(output);
 }
