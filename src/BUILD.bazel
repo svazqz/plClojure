@@ -1,25 +1,48 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
-java_import(
-    name = "spec_alpha",
-    jars = ["@spec_alpha//file"],
-)
-
-java_import(
-    name = "clojure",
-    jars = ["@clojure//file"],
-)
-
-# A library that wraps a Java method into a C++ method by starting a JVM and
-# executing the method in it. It has access to the usual jni.h header via the
-# dependency on @fmeum_rules_jni//jni, but does not require any code specific
-# to rules_jni.
 cc_binary(
     name = "pl_clojure",
     srcs = ["main.cpp"],
     deps = [
-        "@fmeum_rules_jni//jni",
-        "@fmeum_rules_jni//jni:libjvm"
+        "@rules_jni//jni",
+        "@rules_jni//jni:libjvm"
+    ],
+    copts = [
+        "-Iexternal/rules_jni/include",
+        "-Iexternal/rules_clojure/include"
+    ],
+    linkopts = [
+        "-L/opt/homebrew/Cellar/openjdk/23.0.2/libexec/openjdk.jdk/Contents/Home/lib/server",
+        "-ljvm"
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_binary(
+    name = "pl_clojure_handler",
+    srcs = ["pl_clojure_handler.c"],  # Changed from .cpp to .c
+    deps = [
+        "@rules_jni//jni",
+        "@rules_jni//jni:libjvm",
+        "@postgresql//:postgresql",
+    ],
+    copts = [
+        "-fPIC",
+        "-Iexternal/rules_jni/include",
+        "-Iexternal/rules_clojure/include",
+        "-Iexternal/postgresql/include",
+        "-std=c11",  # Added C11 standard
+    ],
+    linkopts = [
+        "-undefined", "dynamic_lookup",
+        "-L/opt/homebrew/Cellar/openjdk/23.0.2/libexec/openjdk.jdk/Contents/Home/lib/server",
+        "-ljvm",
+        "-L/opt/homebrew/opt/postgresql@14/lib/postgresql@14",
+        "-rpath", "/opt/homebrew/opt/postgresql@14/lib/postgresql@14",
+        "-lpq",
+        "-shared",
+    ],
+    linkshared = True,
+    visibility = ["//visibility:public"],
+)
+

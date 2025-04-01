@@ -1,8 +1,7 @@
-###############################################################################
-# Bazel now uses Bzlmod by default to manage external dependencies.
-# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
-#
-# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
-###############################################################################
-# bazel_dep(name = "rules_jni", version = "0.4.0")
-bazel_dep(name = "rules_jni", version = "0.4.0", repo_name = "fmeum_rules_jni")
+bazel_dep(name = "rules_jni", version = "0.4.0")
+
+git_override(
+    module_name = "rules_cc",
+    remote = "https://github.com/bazelbuild/rules_cc.git",
+    commit = "aa7e56df4fb764f773d1f1db9fd309df97f49214"
+)

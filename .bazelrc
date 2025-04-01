@@ -1,26 +1,7 @@
-# Isolate sandboxed build actions from each other.
-build --sandbox_tmpfs_path=/tmp
-
-# Trim PATH to the bare minimum for build actions, but preserve it for tests.
-build --incompatible_strict_action_env
-test --noincompatible_strict_action_env
-
-# Required for layering_check.
-build:ci --repo_env=CC=clang
-build:ci --features=layering_check
-
-# Requires Bazel 5.
-build:bzlmod --experimental_enable_bzlmod
-
-# General coverage setup.
-coverage --repo_env=CC=clang
-coverage --repo_env=BAZEL_USE_LLVM_NATIVE_COVERAGE=1
-coverage --repo_env=GCOV=llvm-profdata
-coverage --combined_report=lcov
-coverage --experimental_use_llvm_covmap
-coverage --experimental_generate_llvm_lcov
-coverage --test_tag_filters=-no-coverage
-
-coverage:ci --repo_env=CC=clang-14
-coverage:ci --repo_env=GCOV=llvm-profdata-14
-coverage:ci --repo_env=BAZEL_LLVM_COV=llvm-cov-14
+common --enable_workspace
+common --keep_going
+common --color=yes
+build --cxxopt=-std=c++17
+build --jobs=4
+build --verbose_failures
+build --sandbox_debug
