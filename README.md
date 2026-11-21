@@ -2,6 +2,8 @@
 
 A PostgreSQL procedural-language extension that connects database functions to Clojure and JVM libraries.
 
+[![Validation](https://github.com/svazqz/plClojure/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/svazqz/plClojure/actions/workflows/ci.yml)
+
 [Quick start](#quick-start) · [Validation](#validation) · [Project layout](#project-layout) · [Reference](#reference) · [License](#license)
 
 ## Quick start
