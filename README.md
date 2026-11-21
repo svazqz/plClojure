@@ -1,87 +1,38 @@
-# PL/Clojure - Clojure Procedural Language for PostgreSQL
+# ![PL/Clojure](docs/readme/banner.svg)
 
-PL/Clojure allows you to write PostgreSQL functions in Clojure. It provides a bridge between PostgreSQL and the JVM, enabling you to leverage Clojure's powerful features within your database functions.
+A PostgreSQL procedural-language extension that connects database functions to Clojure and JVM libraries.
 
-## Features
+[Quick start](#quick-start) · [Validation](#validation) · [Project layout](#project-layout) · [Reference](#reference) · [License](#license)
 
-- Write PostgreSQL functions using Clojure
-- Full access to Clojure's standard library and Java interop
-- Support for array arguments and text return values
-- Seamless integration with PostgreSQL's type system
+## Quick start
 
-## Prerequisites
+Use a development PostgreSQL 14+ instance, a compatible JDK, and Leiningen. Read the reference for your toolchain and PostgreSQL headers, then install against the development instance.
 
-- PostgreSQL 14 or later
-    - Install with Homebrew:
-    ```bash
-    brew install postgresql@14
-    ```
-- Java Development Kit (JDK) 8 or later
-- Clojure 1.9.0 or later
-- Bazel build system
-
-## Installation
-
-1. Run install.sh:
-```bash
-chmod u+x install.sh
+```sh
 ./install.sh
 ```
 
-## Examples
-### String Manipulation
-```sql
-SELECT pl_clojure_call_array(
-    '(fn [& args] 
-        (let [words args
-              sorted (sort words)
-              capitalized (map clojure.string/capitalize sorted)]
-          (clojure.string/join ", " capitalized)))',
-    ARRAY['world', 'hello', 'clojure', 'postgresql']
-);
- ```
-```
+## Validation
 
-### Working with Database Data
-```sql
-WITH user_data AS (
-    SELECT array_agg(name || ',' || age::text) as user_array
-    FROM users
-)
-SELECT pl_clojure_call_array(
-    '(fn [& records]
-        (let [parsed (map #(clojure.string/split % #",") records)
-              filtered (filter (fn [[_ age]]
-                               (let [age-num (Integer/parseInt age)]
-                                 (and (>= age-num 25) (<= age-num 35))))
-                             parsed)]
-          (clojure.string/join "|"
-            (map (fn [[name age]]
-                   (format "%s,%s" name age))
-                 filtered))))',
-    user_array
-);
- ```
-```
-
-## Development
-Run the test suite:
-
-```bash
+```sh
 ./test.sh
- ```
+```
+
+Run the integration checks against a disposable PostgreSQL instance.
+
+## Project layout
+
+| Path | Purpose |
+| --- | --- |
+| [`src/`](src/) | PostgreSQL/JVM bridge |
+| [`lib/`](lib/) | Clojure implementation |
+| [`install.sh`](install.sh) | Installation entry point |
+| [`test.sh`](test.sh) | Integration checks |
+
+## Reference
+
+Read the [project reference](README.reference.md) for detailed examples, configuration, and original notes.
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Contributing
-1. Fork the repository
-2. Create your feature branch ( git checkout -b feature/amazing-feature )
-3. Commit your changes ( git commit -m 'Add some amazing feature' )
-4. Push to the branch ( git push origin feature/amazing-feature )
-5. Open a Pull Request
-
-## Acknowledgments
-- PostgreSQL community
-- Clojure community
-- JNI contributors
+See [`LICENSE`](LICENSE) for license terms.
