@@ -1,0 +1,8 @@
+**
+!lib
+!lib/*.jar
+!src
+!src/pl_clojure_handler.c
+!tests
+!tests/run-postgres.sh
+!tests/integration.sql
