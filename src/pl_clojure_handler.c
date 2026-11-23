@@ -15,6 +15,10 @@ PG_MODULE_MAGIC;
 static JavaVM *jvm = NULL;  // Java Virtual Machine instance
 static JNIEnv *env = NULL;  // JNI environment for thread
 
+#ifndef PLCLOJURE_JAR_DIR
+#define PLCLOJURE_JAR_DIR "/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib"
+#endif
+
 // Initialize the Java Virtual Machine with Clojure classpath
 static void init_jvm(void) {
     if (jvm != NULL) return;  // Only initialize once
@@ -23,9 +27,10 @@ static void init_jvm(void) {
     JavaVMOption options[1];
 
     // Set classpath to find Clojure JAR files
-    options[0].optionString = "-Djava.class.path=/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/clojure-1.9.0.jar:"
-                             "/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/spec.alpha-0.1.143.jar:"
-                             "/opt/homebrew/opt/postgresql@14/lib/postgresql@14/lib/core.specs.alpha-0.1.24.jar";
+    options[0].optionString = "-Djava.class.path="
+        PLCLOJURE_JAR_DIR "/clojure-1.9.0.jar:"
+        PLCLOJURE_JAR_DIR "/spec.alpha-0.1.143.jar:"
+        PLCLOJURE_JAR_DIR "/core.specs.alpha-0.1.24.jar";
 
     // Configure JVM initialization parameters
     vm_args.version = JNI_VERSION_1_8;
