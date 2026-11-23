@@ -12,3 +12,6 @@ if ! "$pg_bin/psql" -X -v ON_ERROR_STOP=1 -d postgres -f tests/integration.sql; 
   cat "$runtime/server.log" >&2
   exit 1
 fi
+"$pg_bin/pg_ctl" -D "$runtime/data" -m fast -w stop
+cd "$runtime"
+gcov -b -o /extension/coverage /extension/src/pl_clojure_handler.c

@@ -7,11 +7,14 @@ WORKDIR /extension
 COPY lib lib
 COPY src/pl_clojure_handler.c src/
 COPY tests/run-postgres.sh tests/integration.sql tests/
-RUN JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" \
-    && cc -fPIC -shared \
+RUN mkdir coverage && JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" \
+    && cc --coverage -fprofile-abs-path -fPIC -c \
       -D'PLCLOJURE_JAR_DIR="/extension/lib"' \
       -I"$(pg_config --includedir-server)" -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
-      src/pl_clojure_handler.c -L"$JAVA_HOME/lib/server" -Wl,-rpath,"$JAVA_HOME/lib/server" \
-      -ljvm -o pl_clojure_handler.so
+      src/pl_clojure_handler.c -o coverage/pl_clojure_handler.o \
+    && cc --coverage -shared coverage/pl_clojure_handler.o \
+      -L"$JAVA_HOME/lib/server" -Wl,-rpath,"$JAVA_HOME/lib/server" \
+      -ljvm -o pl_clojure_handler.so \
+    && chown -R postgres:postgres coverage
 USER postgres
 CMD ["sh", "tests/run-postgres.sh"]

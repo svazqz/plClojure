@@ -73,7 +73,16 @@ Datum pl_clojure_call_array(PG_FUNCTION_ARGS) {
         if (!nulls[i]) {
             char *str = TextDatumGetCString(elements[i]);
             appendStringInfoChar(&args_buf, '"');
-            appendStringInfoString(&args_buf, str);
+            for (const char *character = str; *character; character++) {
+                switch (*character) {
+                    case '\\': appendStringInfoString(&args_buf, "\\\\"); break;
+                    case '"': appendStringInfoString(&args_buf, "\\\""); break;
+                    case '\n': appendStringInfoString(&args_buf, "\\n"); break;
+                    case '\r': appendStringInfoString(&args_buf, "\\r"); break;
+                    case '\t': appendStringInfoString(&args_buf, "\\t"); break;
+                    default: appendStringInfoChar(&args_buf, *character);
+                }
+            }
             appendStringInfoChar(&args_buf, '"');
             pfree(str);
         } else {
