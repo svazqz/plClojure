@@ -30,6 +30,21 @@ BEGIN
         END IF;
     END;
 
+    IF pl_clojure_call_array('(fn [x] x)', ARRAY[E'Label "sample"\\dir\nnext\r\tcolumn'])
+          IS DISTINCT FROM E'Label "sample"\\dir\nnext\r\tcolumn' THEN
+        RAISE EXCEPTION 'Quotes, backslashes, and control characters must round trip';
+    END IF;
+
+    BEGIN
+        PERFORM pl_clojure_call_array(
+          '(fn [] (reify Object (toString [_] (throw (Exception. "fixture")))))', ARRAY[]::text[]);
+        RAISE EXCEPTION 'Expected string conversion to fail';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM <> 'Failed to convert result to string' THEN
+            RAISE;
+        END IF;
+    END;
+
     recovered := pl_clojure_call_array('(fn [x] x)', ARRAY['ok']);
     IF recovered IS DISTINCT FROM 'ok' THEN
         RAISE EXCEPTION 'A previous evaluation error must not poison the session';
