@@ -38,3 +38,5 @@ Read the [project reference](README.reference.md) for detailed examples, configu
 ## License
 
 See [`LICENSE`](LICENSE) for license terms.
+
+See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled or external dependencies.
